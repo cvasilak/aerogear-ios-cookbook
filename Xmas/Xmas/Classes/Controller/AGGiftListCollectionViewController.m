@@ -17,8 +17,10 @@
 
 #import "AGGiftListCollectionViewController.h"
 #import "AGAddPresentViewController.h"
-#import "AeroGear.h"
-#import <AeroGearCrypto.h>
+#import <AeroGear/AeroGear.h>
+#import <AeroGear-Crypto/AGSecretBox.h>
+#import <AeroGear-Crypto/AGRandomGenerator.h>
+#import <AeroGear-Crypto/AGPBKDF2.h>
 
 @implementation AGGiftListCollectionViewController {
     NSString* _currentGiftId;
@@ -65,7 +67,7 @@
         [defaults synchronize];
     }
     if(!_IV) { // if first lunch, initialize params for subsequent reads
-        _IV =  [AGRandomGenerator randomBytes];
+        _IV =  [AGRandomGenerator randomBytes:24];
         [defaults setObject:_IV forKey:@"xmas.iv"];
         [defaults synchronize];
     }
@@ -156,7 +158,8 @@
 
     } else {
         // decrypt description
-        NSMutableDictionary* gift = [self getGiftwithId:_currentGiftId within:self.gifts]; 
+        NSMutableDictionary* gift = [self getGiftwithId:_currentGiftId within:self.gifts];
+        
         gift[@"description"] = [self decrypt:gift[@"description"]];
         _isCellSelected[_currentRowSelected] = [NSNumber numberWithBool:YES];
         _currentRowSelected = -1;
@@ -211,9 +214,23 @@
     NSData* dataToEncrypt = [gift[@"description"] dataUsingEncoding:NSUTF8StringEncoding];
     
     // encrypt data
-    gift[@"description"] = [secretBox encrypt:dataToEncrypt IV:_IV];
+    NSError *error;
+    NSData *encryptedData = [secretBox encrypt:dataToEncrypt nonce:_IV error:&error];
+    
+    if (error) {
+        UIAlertView *message = [[UIAlertView alloc] initWithTitle:@"An error has occured"
+                                                          message:[error description]
+                                                         delegate:nil
+                                                cancelButtonTitle:@"Bummer!"
+                                                otherButtonTitles:nil];
+        
+        [message show];
+        
+        return;
+    }
     
     // Store data with encrypted description
+    gift[@"description"] = encryptedData;
     [_store save:gift error:nil];
     
     [self.gifts addObject:gift];
@@ -223,7 +240,22 @@
     NSData* key = [self getKeyFromPassword:_password];
     AGSecretBox* secretBox = [[AGSecretBox alloc] initWithKey:key];
     
-    return [[NSString alloc] initWithData:[secretBox decrypt:data IV:_IV] encoding:NSUTF8StringEncoding];
+    NSError *error;
+    NSString *decryptedData = [[NSString alloc] initWithData:[secretBox decrypt:data nonce:_IV error:&error] encoding:NSUTF8StringEncoding];
+    
+    if (error) {
+        UIAlertView *message = [[UIAlertView alloc] initWithTitle:@"An error has occured!"
+                                                          message:[error description]
+                                                         delegate:nil
+                                                cancelButtonTitle:@"Bummer!"
+                                                otherButtonTitles:nil];
+        
+        [message show];
+        
+        return @""; // return empty upon error
+    }
+
+    return decryptedData;
 }
 
 @end
