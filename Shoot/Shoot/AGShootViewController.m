@@ -16,11 +16,15 @@
  */
 
 #import "AGShootViewController.h"
-#import "AeroGear.h"
-
 #import "SVProgressHUD.h"
+
+#import <AeroGear/AeroGear.h>
+#import <AeroGear-Crypto/AeroGearCrypto.h>
+
 #import <AssetsLibrary/AssetsLibrary.h>
-#import "AGAppDelegate.h"
+
+// the salt
+static NSString *const kSalt = @"nsalt";
 
 @interface AGShootViewController ()
     @property BOOL newMedia;
@@ -32,14 +36,44 @@
 @end
 
 @implementation AGShootViewController {
-    AGAuthorizer* _authorizer;
+    AGAccountManager *_acctManager;
     AGPipeline* _pipeline;
 }
 
 - (void)viewDidLoad {
     [super viewDidLoad];
     
-    _authorizer = [AGAuthorizer authorizer];
+    // show the password screen for user to enter his password
+    UIAlertView * alert = [[UIAlertView alloc] initWithTitle:@"Enter passphrase"
+                                                     message:@"Enter your passphrase:" delegate:self
+                                           cancelButtonTitle:@"OK" otherButtonTitles:nil];
+    
+    alert.alertViewStyle = UIAlertViewStyleSecureTextInput;
+    [alert show];
+    
+}
+
+- (void)setup:(NSString *)passphrase {
+    // set up crypto params configuration object
+    AGPassphraseCryptoConfig *config = [[AGPassphraseCryptoConfig alloc] init];
+    [config setSalt:[self salt]];
+    [config setPassphrase:passphrase];
+    
+    // initialize the encryption service passing the config
+    id<AGEncryptionService> encService = [[AGKeyManager manager] keyService:config];
+    
+    // access Store Manager
+    AGDataManager *manager = [AGDataManager manager];
+    
+    // create store
+    id<AGStore> store = [manager store:^(id<AGStoreConfig> config) {
+        [config setName:@"OAuthStorage"];
+        // can also be set to "ENCRYPTED_SQLITE" for the encrypted sqlite variant
+        [config setType:@"ENCRYPTED_PLIST"];
+        [config setEncryptionService:encService];
+    }];
+    
+    _acctManager = [AGAccountManager manager:store];
     _pipeline = [AGPipeline pipeline];
 }
 
@@ -82,11 +116,13 @@
         [alert show];
         return;
     }
-    UIActionSheet *actionSheet = [[UIActionSheet alloc] initWithTitle:nil delegate:(id<UIActionSheetDelegate>)self cancelButtonTitle:@"Cancel" destructiveButtonTitle:nil otherButtonTitles:@"Facebook", @"Google", nil];
+    UIActionSheet *actionSheet = [[UIActionSheet alloc] initWithTitle:nil delegate:self cancelButtonTitle:@"Cancel" destructiveButtonTitle:nil otherButtonTitles:@"Facebook", @"Google", nil];
     
     [actionSheet showInView:self.view];
 
 }
+
+#pragma mark - ActionSheet Actions
 
 - (void)actionSheet:(UIActionSheet *)actionSheet clickedButtonAtIndex:(NSInteger)buttonIndex {
     if ([[actionSheet buttonTitleAtIndex:buttonIndex] isEqualToString:@"Facebook"]) {
@@ -97,18 +133,18 @@
 }
 
 -(void)shareWithFacebook {
-    id<AGAuthzModule> facebookAuthzModule = [_authorizer authzModuleWithName:@"facebook"];
+    id<AGAuthzModule> facebookAuthzModule = [_acctManager authzModuleWithName:@"facebook"];
 
     if (!facebookAuthzModule) {
         // TODO replace XXX -> secret and 765891443445434 -> your app id in this file + plist file
-        facebookAuthzModule = [_authorizer authz:^(id<AGAuthzConfig> config) {
+        facebookAuthzModule = [_acctManager authz:^(id<AGAuthzConfig> config) {
             config.name = @"facebook";
-            config.baseURL = [[NSURL alloc] init];
-            config.authzEndpoint = @"https://www.facebook.com/dialog/oauth";
+            config.baseURL = [NSURL URLWithString:@"https://www.facebook.com"];
+            config.authzEndpoint = @"/dialog/oauth";
             config.accessTokenEndpoint = @"https://graph.facebook.com/oauth/access_token";
-            config.clientId = @"765891443445434";
-            config.clientSecret = @"XXX";
-            config.redirectURL = @"fb765891443445434://authorize/";
+            config.clientId = @"786098534747552";
+            config.clientSecret = @"2a9404949ab31cf3afb7849d92569dce";
+            config.redirectURL = @"fb786098534747552://authorize/";
             config.scopes = @[@"user_friends, public_profile, publish_stream,user_photos,user_photo_video_tags, photo_upload, publish_actions"];
             config.type = @"AG_OAUTH2_FACEBOOK";
         }];
@@ -134,19 +170,19 @@
 }
 
 - (void)shareWithGoogleDrive {
-    id<AGAuthzModule> googleAuthzModule = [_authorizer authzModuleWithName:@"google"];
+    id<AGAuthzModule> googleAuthzModule = [_acctManager authzModuleWithName:@"google"];
     
     if (!googleAuthzModule) {
-        googleAuthzModule = [_authorizer authz:^(id<AGAuthzConfig> config) {
-                config.name = @"google";
-                config.baseURL = [[NSURL alloc] initWithString:@"https://accounts.google.com"];
-                config.authzEndpoint = @"/o/oauth2/auth";
-                config.accessTokenEndpoint = @"/o/oauth2/token";
-                config.clientId = @"873670803862-g6pjsgt64gvp7r25edgf4154e8sld5nq.apps.googleusercontent.com";
-                config.redirectURL = @"org.aerogear.Shoot:/oauth2Callback";
-                config.scopes = @[@"https://www.googleapis.com/auth/drive"];
-                config.type = @"AG_OAUTH2";
-            }];
+        googleAuthzModule = [_acctManager authz:^(id<AGAuthzConfig> config) {
+            config.name = @"google";
+            config.baseURL = [NSURL URLWithString:@"https://accounts.google.com"];
+            config.authzEndpoint = @"/o/oauth2/auth";
+            config.accessTokenEndpoint = @"/o/oauth2/token";
+            config.clientId = @"873670803862-g6pjsgt64gvp7r25edgf4154e8sld5nq.apps.googleusercontent.com";
+            config.redirectURL = @"org.aerogear.Shoot:/oauth2Callback";
+            config.scopes = @[@"https://www.googleapis.com/auth/drive"];
+            config.type = @"AG_OAUTH2";
+        }];
     }
     
     id<AGPipe> googleUploadPipe = [_pipeline pipeWithName:@"googleUploadPipe"];
@@ -271,5 +307,25 @@
     [self dismissViewControllerAnimated:YES completion:nil];
 }
 
+#pragma mark - UIAlertViewDelegate
+
+- (void)alertView:(UIAlertView *)alertView didDismissWithButtonIndex:(NSInteger)buttonIndex {
+   [self setup:[[alertView textFieldAtIndex:0] text]];
+}
+
+#pragma mark - Utility methods
+- (NSData *)salt {
+    // retrieve or create salt
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSData *salt = [defaults objectForKey:kSalt];
+    
+    if (!salt) {
+        salt = [AGRandomGenerator randomBytes];
+        [defaults setObject:salt forKey:kSalt];
+        [defaults synchronize];
+    }
+    
+    return salt;
+}
 
 @end
