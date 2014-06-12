@@ -37,7 +37,9 @@ static NSString *const kSalt = @"nsalt";
 
 @implementation AGShootViewController {
     AGAccountManager *_acctManager;
-    AGPipeline* _pipeline;
+    
+    AGPipeline *_fbPipeline;
+    AGPipeline *_gPipeline;
 }
 
 - (void)viewDidLoad {
@@ -49,8 +51,7 @@ static NSString *const kSalt = @"nsalt";
                                            cancelButtonTitle:@"OK" otherButtonTitles:nil];
     
     alert.alertViewStyle = UIAlertViewStyleSecureTextInput;
-    [alert show];
-    
+    [alert show];    
 }
 
 - (void)setup:(NSString *)passphrase {
@@ -73,8 +74,61 @@ static NSString *const kSalt = @"nsalt";
         [config setEncryptionService:encService];
     }];
     
+    // initialize account manager with encrypted store backend
     _acctManager = [AGAccountManager manager:store];
-    _pipeline = [AGPipeline pipeline];
+
+    // set up facebook and google authz modules
+
+    // TODO replace XXX -> client_id, YYY -> client_secret,  ZZZ -> your app id in this file + plist file
+    id<AGAuthzModule> facebookAuthzModule = [_acctManager authz:^(id<AGAuthzConfig> config) {
+        config.accountId = @"my_facebook_account";
+        config.name = @"facebook";
+        config.baseURL = [NSURL URLWithString:@"https://www.facebook.com"];
+        config.authzEndpoint = @"/dialog/oauth";
+        config.accessTokenEndpoint = @"https://graph.facebook.com/oauth/access_token";
+        config.clientId = @"XXX";
+        config.clientSecret = @"YYY";
+        config.redirectURL = @"fbZZZ://authorize/";
+        config.scopes = @[@"user_friends, public_profile, publish_stream,user_photos,user_photo_video_tags, photo_upload, publish_actions"];
+        config.type = @"AG_OAUTH2_FACEBOOK";
+    }];
+    
+    id<AGAuthzModule> googleAuthzModule = [_acctManager authz:^(id<AGAuthzConfig> config) {
+        config.accountId = @"my_google_account";
+        config.name = @"google";
+        config.baseURL = [NSURL URLWithString:@"https://accounts.google.com"];
+        config.authzEndpoint = @"/o/oauth2/auth";
+        config.accessTokenEndpoint = @"/o/oauth2/token";
+        config.clientId = @"873670803862-g6pjsgt64gvp7r25edgf4154e8sld5nq.apps.googleusercontent.com";
+        config.redirectURL = @"org.aerogear.Shoot:/oauth2Callback";
+        config.scopes = @[@"https://www.googleapis.com/auth/drive"];
+        config.type = @"AG_OAUTH2";
+    }];
+    
+    // set up our facebook pipeline and pipes
+    _fbPipeline = [AGPipeline pipelineWithBaseURL:[NSURL URLWithString:@"https://graph.facebook.com/me/"]];
+
+    [_fbPipeline pipe:^(id<AGPipeConfig> config) {
+            [config setName:@"facebookUploadPipe"];
+            // the Facebook API base URL, you need to
+            [config setEndpoint:@"photos"];
+            [config setAuthzModule:facebookAuthzModule];
+        }];
+    
+    // set up our google pipeline and pipes
+    _gPipeline = [AGPipeline pipelineWithBaseURL:[NSURL URLWithString:@"https://www.googleapis.com"]];
+    
+    [_gPipeline pipe:^(id<AGPipeConfig> config) {
+        [config setName:@"googleUploadPipe"];
+        [config setEndpoint:@"upload/drive/v2/files"];
+        [config setAuthzModule:googleAuthzModule];
+    }];
+    
+    [_gPipeline pipe:^(id<AGPipeConfig> config) {
+        [config setName:@"googleMetaPipe"];
+        [config setEndpoint:@"drive/v2/files"];
+        [config setAuthzModule:googleAuthzModule];
+    }];
 }
 
 #pragma mark - Toolbar Actions
@@ -133,35 +187,8 @@ static NSString *const kSalt = @"nsalt";
 }
 
 -(void)shareWithFacebook {
-    id<AGAuthzModule> facebookAuthzModule = [_acctManager authzModuleWithName:@"facebook"];
+    id<AGPipe> fbUploadPipe = [_fbPipeline pipeWithName:@"facebookUploadPipe"];
 
-    if (!facebookAuthzModule) {
-        // TODO replace XXX -> secret and 765891443445434 -> your app id in this file + plist file
-        facebookAuthzModule = [_acctManager authz:^(id<AGAuthzConfig> config) {
-            config.name = @"facebook";
-            config.baseURL = [NSURL URLWithString:@"https://www.facebook.com"];
-            config.authzEndpoint = @"/dialog/oauth";
-            config.accessTokenEndpoint = @"https://graph.facebook.com/oauth/access_token";
-            config.clientId = @"786098534747552";
-            config.clientSecret = @"2a9404949ab31cf3afb7849d92569dce";
-            config.redirectURL = @"fb786098534747552://authorize/";
-            config.scopes = @[@"user_friends, public_profile, publish_stream,user_photos,user_photo_video_tags, photo_upload, publish_actions"];
-            config.type = @"AG_OAUTH2_FACEBOOK";
-        }];
-    }
-    
-    id<AGPipe> fbUploadPipe = [_pipeline pipeWithName:@"facebook"];
-    
-    if (!fbUploadPipe) {
-        fbUploadPipe =  [_pipeline pipe:^(id<AGPipeConfig> config) {
-            [config setName:@"facebook"];
-            // the Facebook API base URL, you need to
-            [config setBaseURL:[NSURL URLWithString:@"https://graph.facebook.com/me/"]];
-            [config setEndpoint:@"photos"];
-            [config setAuthzModule:facebookAuthzModule];
-        }];
-    }
-    
     [self performUploadWithPipe:fbUploadPipe success:^(id responseObject) {
         [SVProgressHUD showSuccessWithStatus:@"Successfully uploaded!"];
     } failure:^(NSError *error) {
@@ -170,39 +197,7 @@ static NSString *const kSalt = @"nsalt";
 }
 
 - (void)shareWithGoogleDrive {
-    id<AGAuthzModule> googleAuthzModule = [_acctManager authzModuleWithName:@"google"];
-    
-    if (!googleAuthzModule) {
-        googleAuthzModule = [_acctManager authz:^(id<AGAuthzConfig> config) {
-            config.name = @"google";
-            config.baseURL = [NSURL URLWithString:@"https://accounts.google.com"];
-            config.authzEndpoint = @"/o/oauth2/auth";
-            config.accessTokenEndpoint = @"/o/oauth2/token";
-            config.clientId = @"873670803862-g6pjsgt64gvp7r25edgf4154e8sld5nq.apps.googleusercontent.com";
-            config.redirectURL = @"org.aerogear.Shoot:/oauth2Callback";
-            config.scopes = @[@"https://www.googleapis.com/auth/drive"];
-            config.type = @"AG_OAUTH2";
-        }];
-    }
-    
-    id<AGPipe> googleUploadPipe = [_pipeline pipeWithName:@"googleUploadPipe"];
-    id<AGPipe> metaPipe = [_pipeline pipeWithName:@"googleMetaPipe"];
-    
-    if (!googleUploadPipe) {
-        googleUploadPipe = [_pipeline pipe:^(id<AGPipeConfig> config) {
-            [config setBaseURL:[NSURL URLWithString:@"https://www.googleapis.com"]];
-            [config setName:@"googleUploadPipe"];
-            [config setEndpoint:@"upload/drive/v2/files"];
-            [config setAuthzModule:googleAuthzModule];
-        }];
-        
-        metaPipe = [_pipeline pipe:^(id<AGPipeConfig> config) {
-            [config setBaseURL:[NSURL URLWithString:@"https://www.googleapis.com"]];            
-            [config setName:@"googleMetaPipe"];
-            [config setEndpoint:@"drive/v2/files"];
-            [config setAuthzModule:googleAuthzModule];
-        }];
-    }
+    id<AGPipe> googleUploadPipe = [_gPipeline pipeWithName:@"googleUploadPipe"];
     
     [self performUploadWithPipe:googleUploadPipe success:^(id responseObject) {
          // time to set metadata
@@ -213,7 +208,8 @@ static NSString *const kSalt = @"nsalt";
         NSDictionary *params = @{ @"id":fileId, @"title": self.imageView.accessibilityIdentifier};
         
         // set metadata
-        [metaPipe save:params success:^(id responseObject) {
+        id<AGPipe> googleMetaPipe = [_gPipeline pipeWithName:@"googleMetaPipe"];
+        [googleMetaPipe save:params success:^(id responseObject) {
             [SVProgressHUD showSuccessWithStatus:@"Successfully uploaded!"];
         } failure:^(NSError *error) {
             [SVProgressHUD showErrorWithStatus:@"Failed to set metadata!"];
