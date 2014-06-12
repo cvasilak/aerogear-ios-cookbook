@@ -21,16 +21,23 @@
 #import <SVProgressHUD.h>
 
 @interface ProductsViewController () {
-    NSArray *_products;
+    __weak IBOutlet UIButton *revokeBut;
+    __weak IBOutlet UIBarButtonItem *refreshBut;
+    
+    // holds the data from the server
+    NSArray *_data;
+    
+    id<AGPipe> _pipe;
+    id<AGAuthzModule> _restAuthzModule;
 }
 
 @end
 
 @implementation ProductsViewController
 
-- (void)viewDidLoad
-{
+- (void)viewDidLoad {
     [super viewDidLoad];
+    
     // Initialize pop-up warning to start OAuth2 authz
     UIAlertView * alert = [[UIAlertView alloc] initWithTitle:@"Authorize Keycloak" message:@"You will be redirected to Keycloak to authenticate and grant access." delegate:self cancelButtonTitle:@"ok" otherButtonTitles:nil];
     alert.alertViewStyle = UIAlertViewStyleDefault;
@@ -38,41 +45,55 @@
 }
 
 - (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex {
-    [self authorize:nil];
+    [self authorize];
 }
 
-- (IBAction)authorize:(UIButton *)sender {
+- (IBAction)authorize {
     AGAuthorizer *authorizer = [AGAuthorizer authorizer];
 
-    id<AGAuthzModule> _restAuthzModule = [authorizer authz:^(id<AGAuthzConfig> config) {
+    _restAuthzModule = [authorizer authz:^(id<AGAuthzConfig> config) {
         config.name = @"keycloak";
-        config.baseURL = [[NSURL alloc] initWithString:@"http://localhost:8080/auth"];
+        config.baseURL = [NSURL URLWithString:@"http://localhost:8080/auth"];
         config.authzEndpoint = @"/rest/realms/product-inventory/tokens/login";
         config.accessTokenEndpoint = @"/rest/realms/product-inventory/tokens/access/codes";
+        config.revokeTokenEndpoint = @"???????????????";
         config.clientId = @"product-inventory";
         config.redirectURL = @"org.aerogear.KeycloakDemo://oauth2Callback";
     }];
+    
+    AGPipeline *databasePipeline = [AGPipeline pipelineWithBaseURL:
+                                                [NSURL URLWithString:@"http://localhost:8080/aerogear-integration-tests-server/rest"]];
+    
+    _pipe = [databasePipeline pipe:^(id<AGPipeConfig> config) {
+        [config setName:@"/portal/products"];
+        [config setAuthzModule:_restAuthzModule];
+    }];
+    
+    [self refresh:nil];
+}
 
-    [_restAuthzModule requestAccessSuccess:^(id object) {
+- (IBAction)revoke:(id)sender {
+    [_restAuthzModule revokeAccessSuccess:^(id object) {
+        [SVProgressHUD showSuccessWithStatus:@"Token was revoked successfully!"];
         
-        AGPipeline *databasePipeline = [AGPipeline pipelineWithBaseURL:[NSURL URLWithString:@"http://localhost:8080/aerogear-integration-tests-server/rest"]];
-        
-        id<AGPipe> products = [databasePipeline pipe:^(id<AGPipeConfig> config) {
-            [config setName:@"/portal/products"];
-            [config setAuthzModule:_restAuthzModule];
-        }];
-        
-        [products read:^(id responseObject) {
-            _products = responseObject;
-
-            [self.tableView reloadData];
-
-        } failure:^(NSError *error) {
-            NSLog(@"Read: An error occured! \n%@", error);
-        }];
-
+        revokeBut.enabled = NO;
     } failure:^(NSError *error) {
-        NSLog(@"Read: An error occured! \n%@", error);
+        [SVProgressHUD showErrorWithStatus:[error localizedDescription] ];
+    }];
+}
+
+- (IBAction)refresh:(id)sender {
+    // read from pipe
+    [_pipe read:^(id responseObject) {
+        [SVProgressHUD showSuccessWithStatus:@"Successfully fetched data!"];
+        
+        _data = responseObject;
+        
+        revokeBut.enabled = YES;
+        [self.tableView reloadData];
+        
+    } failure:^(NSError *error) {
+        [SVProgressHUD showErrorWithStatus:[error localizedDescription]];
     }];
 }
 
@@ -83,13 +104,13 @@
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return _products.count;
+    return _data.count;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"Cell" forIndexPath:indexPath];
 
-    NSDictionary *element = _products[indexPath.row];
+    NSDictionary *element = _data[indexPath.row];
     cell.textLabel.text = element[@"name"];
     return cell;
 }
