@@ -24,6 +24,8 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
 
     var newMedia: Bool = true
     
+    var http: Http!
+    
     @IBOutlet weak var imageView: UIImageView!
     
     required init(coder aDecoder: NSCoder) {
@@ -111,10 +113,10 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             scopes:["photo_upload, publish_actions"])
         
         let fbModule =  AccountManager.addFacebookAccount(facebookConfig)
-        let http = Http(url: "https://graph.facebook.com/me/photos")
-        http.authzModule = fbModule
+        self.http = Http(baseURL: "https://graph.facebook.com")
+        self.http.authzModule = fbModule
         
-        self.performUpload(http, parameters: self.extractImageAsMultipartParams())
+        self.performUpload("/me/photos",  parameters: self.extractImageAsMultipartParams())
     }
     
     func shareWithGoogleDrive() {
@@ -125,10 +127,9 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             scopes:["https://www.googleapis.com/auth/drive"])
 
         let gdModule = AccountManager.addGoogleAccount(googleConfig)
-        let http = Http(url: "https://www.googleapis.com/upload/drive/v2/files")
-        http.authzModule = gdModule
-    
-        self.performUpload(http, parameters: self.extractImageAsMultipartParams())
+        self.http = Http(baseURL: "https://www.googleapis.com/upload/drive/v2")
+        self.http.authzModule = gdModule
+        self.performUpload("/files", parameters: self.extractImageAsMultipartParams())
     }
     
     func shareWithKeycloak() {
@@ -143,14 +144,14 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             revokeTokenEndpoint: "realms/shoot-realm/tokens/logout")
 
         let gdModule = AccountManager.addAccount(keycloakConfig, moduleClass: KeycloakOAuth2Module.self)
-        let http = Http(url: "http://localhost:8080/shoot/rest/photos")
-        http.authzModule = gdModule
-        self.performUpload(http, parameters: self.extractImageAsMultipartParams())
+        self.http = Http(baseURL: "http://localhost:8080/shoot")
+       self.http.authzModule = gdModule
+        self.performUpload("/rest/photos", parameters: self.extractImageAsMultipartParams())
         
     }
 
-    func performUpload(http: Http, parameters: [String: AnyObject]?) {
-        http.POST(parameters: parameters, completionHandler: {(response, error) in
+    func performUpload(resource: String, parameters: [String: AnyObject]?) {
+        self.http.POST(resource, parameters: parameters, completionHandler: {(response, error) in
             if (error != nil) {
                 self.presentAlert("Error", message: error!.localizedDescription)
             } else {
