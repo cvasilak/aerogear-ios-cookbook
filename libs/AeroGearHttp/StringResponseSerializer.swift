@@ -24,7 +24,7 @@ public class StringResponseSerializer : ResponseSerializer {
         return NSString(data: data, encoding:NSUTF8StringEncoding)
     }
     
-    public func validateResponse(response: NSURLResponse!, data: NSData!, error: NSErrorPointer) -> Bool {
+    public func validateResponse(response: NSURLResponse!, data: NSData, error: NSErrorPointer) -> Bool {
         let httpResponse = response as NSHTTPURLResponse
         var isValid = true
         

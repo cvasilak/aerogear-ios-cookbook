@@ -17,24 +17,23 @@
 
 import Foundation
 
-public class JsonRequestSerializer  : RequestSerializer {
+public class JsonRequestSerializer:  RequestSerializer {
     
-    public var url: NSURL
+    public var url: NSURL?
     public var headers: [String: String]?
     public var stringEncoding: NSNumber
     public var cachePolicy: NSURLRequestCachePolicy
     public var timeoutInterval: NSTimeInterval
     
-    public init(url: String) {
-        self.url = NSURL.URLWithString(url)
+    public init() {
         self.stringEncoding = NSUTF8StringEncoding
         self.timeoutInterval = 60
         self.cachePolicy = .UseProtocolCachePolicy
     }
     
-    public func request(url: NSURL, method: HttpMethod, parameters: [String: AnyObject]?, headers: [String: String]? = nil) -> NSURLRequest? {
+    public func request(url: NSURL, method: HttpMethod, parameters: [String: AnyObject]?, headers: [String: String]? = nil) -> NSURLRequest {
         var request = NSMutableURLRequest(URL: url, cachePolicy: cachePolicy, timeoutInterval: timeoutInterval)
-        request.HTTPMethod = method.toRaw()
+        request.HTTPMethod = method.rawValue
         
         // apply headers to new request
         if(headers != nil) {
@@ -49,33 +48,30 @@ public class JsonRequestSerializer  : RequestSerializer {
             if (request.URL?.absoluteString != nil && parameters != nil) {
                     let queryString = self.stringFromParameters(parameters!)
                     newUrl = "\(request.URL!.absoluteString!)\(paramSeparator)\(queryString)"
-                    request.URL = NSURL.URLWithString(newUrl)
+                request.URL = NSURL(string: newUrl)!
             }
             
-        } else {
-            
+        } else {            
             var type: String?
             var body: NSData?
             
             // determine if params contain multipart data
-            if hasMultiPartData(parameters!) {
+            if hasMultiPartData(parameters) {
                 let boundary = "AG-boundary-\(arc4random())-\(arc4random())"
                 body = self.multiPartBodyFromParams(parameters!, boundary: boundary)
                 type = "multipart/form-data; boundary=\(boundary)"
             }
             else {
-                
-                // TODO: this should be really json
-                //body =  NSJSONSerialization.dataWithJSONObject(parameters!, options: nil, error: nil)
-                //type = "application/json"
-                
-                // this should be json
-                body = self.stringFromParameters(parameters!).dataUsingEncoding(NSUTF8StringEncoding)
-                type = "application/x-www-form-urlencoded"
+                type = "application/json"
+                if (parameters != nil) {
+                    body =  NSJSONSerialization.dataWithJSONObject(parameters!, options: nil, error: nil)
+                }
             }
             
-            if body != nil {
-                request.setValue(type, forHTTPHeaderField: "Content-Type")
+            // set type
+            request.setValue(type, forHTTPHeaderField: "Content-Type")
+            // set body
+            if (body != nil) {
                 request.setValue("\(body?.length)", forHTTPHeaderField: "Content-Length")
                 request.HTTPBody = body
             }
@@ -172,9 +168,13 @@ public class JsonRequestSerializer  : RequestSerializer {
         return data
     }
     
-    func hasMultiPartData(parameters: [String: AnyObject]) -> Bool {
+    func hasMultiPartData(parameters: [String: AnyObject]?) -> Bool {
+        if (parameters == nil) {
+            return false
+        }
+        
         var isMultiPart = false
-        for (_, value) in parameters {
+        for (_, value) in parameters! {
             if value is MultiPartData {
                 isMultiPart = true
                 break
