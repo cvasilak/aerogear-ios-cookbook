@@ -21,29 +21,12 @@ public class Config {
     /**
     * Applies the baseURL to the configuration.
     */
-    public let base: String
-    
-    public var baseURL:NSURL {
-        get {
-            return NSURL.URLWithString(base)
-        }
-    }
+    public let baseURL: String
     
     /**
     * Applies the "authorization endpoint" to the request token.
     */
-    public let authzEndpoint: String
-    
-    public var authzEndpointURL: NSURL {
-        get {
-            if authzEndpoint.hasPrefix("http") {
-                return NSURL(string: authzEndpoint)
-            } else {
-                var formattedEndpoint = authzEndpoint.hasPrefix("/") ? (authzEndpoint as NSString).substringFromIndex(1) : authzEndpoint
-                return baseURL.URLByAppendingPathComponent(formattedEndpoint)
-            }
-        }
-    }
+    public var authzEndpointURL: String
     
     /**
     * Applies the "callback URL" once request token issued.
@@ -53,68 +36,17 @@ public class Config {
     /**
     * Applies the "access token endpoint" to the exchange code for access token.
     */
-    public let accessTokenEndpoint: String
-    
-    /**
-    * Computed property to get URL by taking care of extra or missing pre or postfix '/'.
-    */
-    public var accessTokenEndpointURL: NSURL {
-        get {
-            if accessTokenEndpoint.hasPrefix("http") {
-                return NSURL(string: accessTokenEndpoint)
-            } else {
-                var formattedEndpoint = accessTokenEndpoint.hasPrefix("/") ? (accessTokenEndpoint as NSString).substringFromIndex(1) : accessTokenEndpoint
-                return baseURL.URLByAppendingPathComponent(formattedEndpoint)
-            }
-        }
-    }
-    
+    public var accessTokenEndpointURL: String
+
     /**
     * Endpoint for request to invalidate both accessToken and refreshToken.
     */
-    public let revokeTokenEndpoint: String?
-    
-    /**
-    * Computed property to get URL by taking care of extra or missing pre or postfix '/'.
-    */
-    public var revokeTokenEndpointURL: NSURL? {
-        get {
-            if let unwrappedRevokeTokenEndpoint = revokeTokenEndpoint {
-                if (revokeTokenEndpoint != nil && revokeTokenEndpoint!.hasPrefix("http")) {
-                    return NSURL(string: revokeTokenEndpoint!)
-                } else {
-                    var formattedEndpoint = unwrappedRevokeTokenEndpoint.hasPrefix("/") ? (unwrappedRevokeTokenEndpoint as NSString).substringFromIndex(1) : unwrappedRevokeTokenEndpoint
-                    return baseURL.URLByAppendingPathComponent(formattedEndpoint)
-                }
-            } else {
-                return nil
-            }
-        }
-    }
+    public let revokeTokenEndpointURL: String?
     
     /**
     * Endpoint for request a refreshToken.
     */
-    public let refreshTokenEndpoint: String?
-    
-    /**
-    * Computed property to get URL by taking care of extra or missing pre or postfix '/'.
-    */
-    public var refreshTokenEndpointURL: NSURL? {
-        get {
-            if let unwrappedRefreshTokenEndpoint = refreshTokenEndpoint {
-                if (refreshTokenEndpoint != nil && refreshTokenEndpoint!.hasPrefix("http")) {
-                    return NSURL(string: refreshTokenEndpoint!)
-                } else {
-                    var formattedEndpoint = unwrappedRefreshTokenEndpoint.hasPrefix("/") ? (unwrappedRefreshTokenEndpoint as NSString).substringFromIndex(1) : unwrappedRefreshTokenEndpoint
-                    return baseURL.URLByAppendingPathComponent(formattedEndpoint)
-                }
-            } else {
-                return nil
-            }
-        }
-    }
-
+    public let refreshTokenEndpointURL: String?
     
     /**
     * Applies the various scopes of the authorization.
@@ -135,15 +67,15 @@ public class Config {
     * Account id is used with AccountManager to store tokens. AccountId is defined by the end-user 
     * and can be any String. If AccountManager is not used, this field is optional.
     */
-    public let accountId: String?
+    public var accountId: String?
     
     public init(base: String, authzEndpoint: String, redirectURL: String, accessTokenEndpoint: String, clientId: String, refreshTokenEndpoint: String? = nil, revokeTokenEndpoint: String? = nil, scopes: [String] = [],  clientSecret: String? = nil, accountId: String? = nil) {
-        self.base = base
-        self.authzEndpoint = authzEndpoint
+        self.baseURL = base
+        self.authzEndpointURL = authzEndpoint
         self.redirectURL = redirectURL
-        self.accessTokenEndpoint = accessTokenEndpoint
-        self.refreshTokenEndpoint = refreshTokenEndpoint
-        self.revokeTokenEndpoint = revokeTokenEndpoint
+        self.accessTokenEndpointURL = accessTokenEndpoint
+        self.refreshTokenEndpointURL = refreshTokenEndpoint
+        self.revokeTokenEndpointURL = revokeTokenEndpoint
         self.scopes = scopes
         self.clientId = clientId
         self.clientSecret = clientSecret

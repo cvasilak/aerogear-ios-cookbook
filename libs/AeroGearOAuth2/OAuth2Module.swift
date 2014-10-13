@@ -18,7 +18,6 @@
 import Foundation
 import UIKit
 
-
 public let AGAppLaunchedWithURLNotification = "AGAppLaunchedWithURLNotification"
 public let AGAppDidBecomeActiveNotification = "AGAppDidBecomeActiveNotification"
 public let AGAuthzErrorDomain = "AGAuthzErrorDomain"
@@ -38,21 +37,19 @@ public class OAuth2Module: AuthzModule {
     var applicationDidBecomeActiveNotificationObserver: NSObjectProtocol?
     var state: AuthorizationState
     
-    // Default accountId, default to TrustedPersistantOAuth2Session
-    public required convenience init(config: Config) {
-        if (config.accountId != nil) {
-            self.init(config: config, accountId:config.accountId!, session: TrustedPersistantOAuth2Session(accountId: config.accountId!))
-        } else {
-            let accountId = "ACCOUNT_FOR_CLIENTID_\(config.clientId)"
-            self.init(config: config, accountId: accountId, session: TrustedPersistantOAuth2Session(accountId: accountId))
+    public required init(config: Config, session: OAuth2Session? = nil, responseSerializer: ResponseSerializer = JsonResponseSerializer()) {
+        if (config.accountId == nil) {
+            config.accountId = "ACCOUNT_FOR_CLIENTID_\(config.clientId)"
         }
-    }
-    
-    public required init(config: Config, accountId: String, session: OAuth2Session) {
+        if (session == nil) {
+            self.oauth2Session = TrustedPersistantOAuth2Session(accountId: config.accountId!)
+        } else {
+            self.oauth2Session = session!
+        }
+        
         self.config = config
         // TODO use timeout config paramter
-        self.http = Http(url: config.base)
-        self.oauth2Session = session
+        self.http = Http(baseURL: config.baseURL, responseSerializer:  responseSerializer)
         self.state = .AuthorizationStateUnknown
     }
     
@@ -85,7 +82,7 @@ public class OAuth2Module: AuthzModule {
         // update state to 'Pending'
         self.state = .AuthorizationStatePendingExternalApproval
         
-        UIApplication.sharedApplication().openURL(url);
+        UIApplication.sharedApplication().openURL(url!);
     }
     
     public func refreshAccessToken(completionHandler: (AnyObject?, NSError?) -> Void) {
@@ -94,9 +91,8 @@ public class OAuth2Module: AuthzModule {
             if (config.clientSecret != nil) {
                 paramDict["client_secret"] = config.clientSecret!
             }
-            http.baseURL = config.refreshTokenEndpointURL!
-            http.POST(parameters: paramDict, completionHandler: { (response, error) in
-                
+
+            http.POST(config.refreshTokenEndpointURL!, parameters: paramDict, completionHandler: { (response, error) in
                 if (error != nil) {
                     completionHandler(nil, error)
                     return
@@ -121,8 +117,7 @@ public class OAuth2Module: AuthzModule {
             paramDict["client_secret"] = unwrapped
         }
         
-        http.baseURL = config.accessTokenEndpointURL
-        http.POST(parameters: paramDict, completionHandler: {(responseObject, error) in
+        http.POST(config.accessTokenEndpointURL, parameters: paramDict, completionHandler: {(responseObject, error) in
             
             if (error != nil) {
                 completionHandler(nil, error)
@@ -162,8 +157,7 @@ public class OAuth2Module: AuthzModule {
         }
         let paramDict:[String:String] = ["token":self.oauth2Session.accessToken!]
         
-        http.baseURL = config.revokeTokenEndpointURL!
-        http.POST(parameters: paramDict, completionHandler: { (response, error) in
+        http.POST(config.revokeTokenEndpointURL!, parameters: paramDict, completionHandler: { (response, error) in
             if (error != nil) {
                 completionHandler(nil, error)
                 return
@@ -252,7 +246,7 @@ public class OAuth2Module: AuthzModule {
     func urlAsString() -> String {
         let scope = self.scope()
         let urlRedirect = self.urlEncodeString(config.redirectURL)
-        let url = "\(config.authzEndpointURL.absoluteString!)?scope=\(scope)&redirect_uri=\(urlRedirect)&client_id=\(config.clientId)&response_type=code"
+        let url = "\(config.authzEndpointURL)?scope=\(scope)&redirect_uri=\(urlRedirect)&client_id=\(config.clientId)&response_type=code"
         return url
     }
     
@@ -274,7 +268,7 @@ public class OAuth2Module: AuthzModule {
             stringToURLEncode as NSString,
             nil,
             "!@#$%&*'();:=+,/?[]",
-            CFStringBuiltInEncodings.UTF8.toRaw())
+            CFStringBuiltInEncodings.UTF8.rawValue)
         return encodedURL as NSString
     }
 }
