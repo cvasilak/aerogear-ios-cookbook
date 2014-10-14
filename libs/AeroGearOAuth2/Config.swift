@@ -24,34 +24,49 @@ public class Config {
     public let baseURL: String
     
     /**
-    * Applies the "authorization endpoint" to the request token.
-    */
-    public var authzEndpointURL: String
-    
-    /**
     * Applies the "callback URL" once request token issued.
     */
     public let redirectURL: String
+
+    /**
+    * Applies the "authorization endpoint" to the request token.
+    */
+    public var authzEndpoint: String
     
     /**
     * Applies the "access token endpoint" to the exchange code for access token.
     */
-    public var accessTokenEndpointURL: String
+    public var accessTokenEndpoint: String
 
     /**
     * Endpoint for request to invalidate both accessToken and refreshToken.
     */
-    public let revokeTokenEndpointURL: String?
+    public let revokeTokenEndpoint: String?
     
     /**
     * Endpoint for request a refreshToken.
     */
-    public let refreshTokenEndpointURL: String?
+    public let refreshTokenEndpoint: String?
     
     /**
     * Applies the various scopes of the authorization.
     */
     public let scopes: [String]
+    
+    var scope: String {
+        get {
+            // Create a string to concatenate all scopes existing in the _scopes array.
+            var scopeString = ""
+            for scope in self.scopes {
+                scopeString += scope.urlEncode()
+                // If the current scope is other than the last one, then add the "+" sign to the string to separate the scopes.
+                if (scope != self.scopes.last) {
+                    scopeString += "+"
+                }
+            }
+            return scopeString
+        }
+    }
     
     /**
     * Applies the "client id" obtained with the client registration process.
@@ -71,11 +86,11 @@ public class Config {
     
     public init(base: String, authzEndpoint: String, redirectURL: String, accessTokenEndpoint: String, clientId: String, refreshTokenEndpoint: String? = nil, revokeTokenEndpoint: String? = nil, scopes: [String] = [],  clientSecret: String? = nil, accountId: String? = nil) {
         self.baseURL = base
-        self.authzEndpointURL = authzEndpoint
+        self.authzEndpoint = authzEndpoint
         self.redirectURL = redirectURL
-        self.accessTokenEndpointURL = accessTokenEndpoint
-        self.refreshTokenEndpointURL = refreshTokenEndpoint
-        self.revokeTokenEndpointURL = revokeTokenEndpoint
+        self.accessTokenEndpoint = accessTokenEndpoint
+        self.refreshTokenEndpoint = refreshTokenEndpoint
+        self.revokeTokenEndpoint = revokeTokenEndpoint
         self.scopes = scopes
         self.clientId = clientId
         self.clientSecret = clientSecret

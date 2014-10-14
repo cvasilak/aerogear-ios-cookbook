@@ -17,7 +17,6 @@
 
 import Foundation
 
-
 public class StringResponseSerializer : ResponseSerializer {
     
     public func response(data: NSData) -> (AnyObject?) {

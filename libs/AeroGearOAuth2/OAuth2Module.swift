@@ -37,7 +37,7 @@ public class OAuth2Module: AuthzModule {
     var applicationDidBecomeActiveNotificationObserver: NSObjectProtocol?
     var state: AuthorizationState
     
-    public required init(config: Config, session: OAuth2Session? = nil, responseSerializer: ResponseSerializer = JsonResponseSerializer()) {
+    public required init(config: Config, session: OAuth2Session? = nil, requestSerializer: RequestSerializer = HttpRequestSerializer(), responseSerializer: ResponseSerializer = JsonResponseSerializer()) {
         if (config.accountId == nil) {
             config.accountId = "ACCOUNT_FOR_CLIENTID_\(config.clientId)"
         }
@@ -49,15 +49,13 @@ public class OAuth2Module: AuthzModule {
         
         self.config = config
         // TODO use timeout config paramter
-        self.http = Http(baseURL: config.baseURL, responseSerializer:  responseSerializer)
+        self.http = Http(baseURL: config.baseURL, requestSerializer: requestSerializer, responseSerializer:  responseSerializer)
         self.state = .AuthorizationStateUnknown
     }
     
     // MARK: Public API - To be overriden if necessary by OAuth2 specific adapter
     
     public func requestAuthorizationCode(completionHandler: (AnyObject?, NSError?) -> Void) {
-        let urlString = self.urlAsString();
-        let url = NSURL(string: urlString)
         // register with the notification system in order to be notified when the 'authorization' process completes in the
         // external browser, and the oauth code is available so that we can then proceed to request the 'access_token'
         // from the server.
@@ -82,7 +80,9 @@ public class OAuth2Module: AuthzModule {
         // update state to 'Pending'
         self.state = .AuthorizationStatePendingExternalApproval
         
-        UIApplication.sharedApplication().openURL(url!);
+        // calculate final url
+        var params = "?scope=\(config.scope)&redirect_uri=\(config.redirectURL.urlEncode())&client_id=\(config.clientId)&response_type=code"
+        UIApplication.sharedApplication().openURL(NSURL(string: http.calculateURL(config.baseURL, url:config.authzEndpoint).absoluteString! + params)!)
     }
     
     public func refreshAccessToken(completionHandler: (AnyObject?, NSError?) -> Void) {
@@ -92,7 +92,7 @@ public class OAuth2Module: AuthzModule {
                 paramDict["client_secret"] = config.clientSecret!
             }
 
-            http.POST(config.refreshTokenEndpointURL!, parameters: paramDict, completionHandler: { (response, error) in
+            http.POST(config.refreshTokenEndpoint!, parameters: paramDict, completionHandler: { (response, error) in
                 if (error != nil) {
                     completionHandler(nil, error)
                     return
@@ -117,15 +117,13 @@ public class OAuth2Module: AuthzModule {
             paramDict["client_secret"] = unwrapped
         }
         
-        http.POST(config.accessTokenEndpointURL, parameters: paramDict, completionHandler: {(responseObject, error) in
-            
+        http.POST(config.accessTokenEndpoint, parameters: paramDict, completionHandler: {(responseObject, error) in
             if (error != nil) {
                 completionHandler(nil, error)
                 return
             }
             
             if let unwrappedResponse = responseObject as? [String: AnyObject] {
-                
                 let accessToken: String = unwrappedResponse["access_token"] as NSString
                 let refreshToken: String = unwrappedResponse["refresh_token"] as NSString
                 let expiration = unwrappedResponse["expires_in"] as NSNumber
@@ -157,7 +155,7 @@ public class OAuth2Module: AuthzModule {
         }
         let paramDict:[String:String] = ["token":self.oauth2Session.accessToken!]
         
-        http.POST(config.revokeTokenEndpointURL!, parameters: paramDict, completionHandler: { (response, error) in
+        http.POST(config.revokeTokenEndpoint!, parameters: paramDict, completionHandler: { (response, error) in
             if (error != nil) {
                 completionHandler(nil, error)
                 return
@@ -241,34 +239,5 @@ public class OAuth2Module: AuthzModule {
             NSNotificationCenter.defaultCenter().removeObserver(applicationDidBecomeActiveNotificationObserver!)
             applicationDidBecomeActiveNotificationObserver = nil
         }
-    }
-    
-    func urlAsString() -> String {
-        let scope = self.scope()
-        let urlRedirect = self.urlEncodeString(config.redirectURL)
-        let url = "\(config.authzEndpointURL)?scope=\(scope)&redirect_uri=\(urlRedirect)&client_id=\(config.clientId)&response_type=code"
-        return url
-    }
-    
-    func scope() -> String {
-        // Create a string to concatenate all scopes existing in the _scopes array.
-        var scopeString = ""
-        for scope in config.scopes {
-            scopeString += self.urlEncodeString(scope)
-            // If the current scope is other than the last one, then add the "+" sign to the string to separate the scopes.
-            if (scope != config.scopes.last) {
-                scopeString += "+"
-            }
-        }
-        return scopeString
-    }
-    
-    func urlEncodeString(stringToURLEncode: String) -> String {
-        let encodedURL = CFURLCreateStringByAddingPercentEscapes(nil,
-            stringToURLEncode as NSString,
-            nil,
-            "!@#$%&*'();:=+,/?[]",
-            CFStringBuiltInEncodings.UTF8.rawValue)
-        return encodedURL as NSString
     }
 }

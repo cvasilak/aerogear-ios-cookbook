@@ -25,7 +25,7 @@ public class KeycloakOAuth2Module: OAuth2Module {
             return;
         }
         let paramDict:[String:String] = [ "client_id": config.clientId, "refresh_token": self.oauth2Session.refreshToken!]
-        http.POST(config.revokeTokenEndpointURL!, parameters: paramDict, completionHandler: { (response, error) in
+        http.POST(config.revokeTokenEndpoint!, parameters: paramDict, completionHandler: { (response, error) in
             if (error != nil) {
                 completionHandler(nil, error)
                 return

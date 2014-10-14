@@ -26,7 +26,7 @@ public enum HttpMethod: String {
 }
 
 enum FileRequestType {
-    case Download(NSURL?)
+    case Download(String?)
     case Upload(UploadType)
 }
 
@@ -36,7 +36,6 @@ enum UploadType {
     case Stream(NSInputStream)
 }
 
-//NSData!, NSURLResponse!, NSError!
 public typealias ProgressBlock = (Int64, Int64, Int64) -> Void
 public typealias CompletionBlock = (AnyObject?, NSError?) -> Void
 
@@ -66,53 +65,96 @@ public class Http {
     }
 
     private func request(url: String, parameters: [String: AnyObject]? = nil,  method:HttpMethod, completionHandler: CompletionBlock) {
-        var finalURL = calculateURL(baseURL, url: url)
-        let request = requestSerializer.request(finalURL, method: method, parameters: parameters, headers: self.authzModule?.authorizationFields())
+        let block: () -> Void =  {
+            var finalURL = self.calculateURL(self.baseURL, url: url)
+            
+            var request: NSURLRequest
+            
+            // care for multipart request is multipart data are set
+            if (self.hasMultiPartData(parameters)) {
+                request = self.requestSerializer.multipartRequest(finalURL, method: method, parameters: parameters, headers: self.authzModule?.authorizationFields())
+            } else {
+                request = self.requestSerializer.request(finalURL, method: method, parameters: parameters, headers: self.authzModule?.authorizationFields())
+            }
+
+            let task = self.session.dataTaskWithRequest(request);
+            let delegate = TaskDataDelegate()
+            delegate.completionHandler = completionHandler
+            delegate.responseSerializer = self.responseSerializer;
+            
+            self.delegate[task] = delegate
+            task.resume()
+        }
         
-        let task = self.session.dataTaskWithRequest(request);
-        let delegate = TaskDataDelegate()
-        delegate.completionHandler = completionHandler
-        delegate.responseSerializer = responseSerializer;
-        
-        self.delegate[task] = delegate
-        task.resume()
+        // cater for authz and pre-authorize prior to performing request
+        if (self.authzModule != nil) {
+            self.authzModule?.requestAccess({ (response, error ) in
+                // if there was an error during authz, no need to continue
+                if (error != nil) {
+                    completionHandler(nil, error)
+                    return
+                }
+                // ..otherwise proceed normally
+                block();
+            })
+        } else {
+            block()
+        }
     }
     
     private func fileRequest(url: String, parameters: [String: AnyObject]? = nil,  method: HttpMethod,  type: FileRequestType, progress: ProgressBlock?, completionHandler: CompletionBlock) {
-        var finalURL = calculateURL(baseURL, url: url)
-        let request = requestSerializer.request(finalURL, method: method, parameters: parameters, headers: self.authzModule?.authorizationFields())
         
-        var task: NSURLSessionTask
+        let block: () -> Void  = {
+            var finalURL = self.calculateURL(self.baseURL, url: url)
+            let request = self.requestSerializer.request(finalURL, method: method, parameters: parameters, headers: self.authzModule?.authorizationFields())
+            
+            var task: NSURLSessionTask
 
-        switch type {
-            case .Download(let destinationDirectory):
-                task = session.downloadTaskWithRequest(request)
-                
-                let delegate = TaskDownloadDelegate()
-                delegate.downloadProgress = progress
-                delegate.destinationDirectory = destinationDirectory;
+            switch type {
+                case .Download(let destinationDirectory):
+                    task = self.session.downloadTaskWithRequest(request)
+                    
+                    let delegate = TaskDownloadDelegate()
+                    delegate.downloadProgress = progress
+                    delegate.destinationDirectory = destinationDirectory;
+                    delegate.completionHandler = completionHandler
+
+                    self.delegate[task] = delegate
+
+                case .Upload(let uploadType):
+                    switch uploadType {
+                        case .Data(let data):
+                            task = self.session.uploadTaskWithRequest(request, fromData: data)
+                        case .File(let url):
+                            task = self.session.uploadTaskWithRequest(request, fromFile: url)
+                        case .Stream(let stream):
+                            task = self.session.uploadTaskWithStreamedRequest(request)
+                    }
+
+                let delegate = TaskUploadDelegate()
+                delegate.uploadProgress = progress
                 delegate.completionHandler = completionHandler
-
+                    
                 self.delegate[task] = delegate
-
-            case .Upload(let uploadType):
-                switch uploadType {
-                    case .Data(let data):
-                        task = session.uploadTaskWithRequest(request, fromData: data)
-                    case .File(let url):
-                        task = session.uploadTaskWithRequest(request, fromFile: url)
-                    case .Stream(let stream):
-                        task = session.uploadTaskWithStreamedRequest(request)
-                }
-
-            let delegate = TaskUploadDelegate()
-            delegate.uploadProgress = progress
-            delegate.completionHandler = completionHandler
-                
-            self.delegate[task] = delegate
+            }
+            
+            task.resume()
         }
         
-        task.resume()
+        // cater for authz and pre-authorize prior to performing request
+        if (self.authzModule != nil) {
+            self.authzModule?.requestAccess({ (response, error ) in
+                // if there was an error during authz, no need to continue
+                if (error != nil) {
+                    completionHandler(nil, error)
+                    return
+                }
+                // ..otherwise proceed normally
+                block();
+            })
+        } else {
+            block()
+        }
     }
     
     public func GET(url: String, parameters: [String: AnyObject]? = nil, completionHandler: CompletionBlock) {
@@ -135,7 +177,7 @@ public class Http {
         request(url, parameters: parameters, method:.HEAD, completionHandler: completionHandler)
     }
     
-    public func download(url: String, parameters: [String: AnyObject]? = nil,  method: HttpMethod = .GET, progress: ProgressBlock?, completionHandler: CompletionBlock, destinationDirectory: NSURL? = nil) {
+    public func download(url: String,  destinationDirectory: String? = nil, parameters: [String: AnyObject]? = nil,  method: HttpMethod = .GET, progress: ProgressBlock?, completionHandler: CompletionBlock) {
         fileRequest(url, parameters: parameters, method: method, type: .Download(destinationDirectory), progress: progress, completionHandler: completionHandler)
     }
     
@@ -172,7 +214,7 @@ public class Http {
         }
         
         func URLSession(session: NSURLSession!, didBecomeInvalidWithError error: NSError!) {
-            println("ddidB")
+            // TODO
         }
         
         func URLSession(session: NSURLSession!, didReceiveChallenge challenge: NSURLAuthenticationChallenge!, completionHandler: ((NSURLSessionAuthChallengeDisposition, NSURLCredential!) -> Void)!) {
@@ -294,41 +336,30 @@ public class Http {
                 completionHandler?(nil, error)
                 return
             }
+            
             var response = task.response as NSHTTPURLResponse
             
-            if (    (response.statusCode == 401  /* Unauthorized */
-                ||   response.statusCode == 400) ) /* Bad Request */ {
-                /* && self.authzModule != nil) {
-                    // replay request with authz set
-                    self.authzModule!.requestAccess({ (response, error) in
-                        // replay request
-                        self.request(finalURL.absoluteString, method: method, parameters: parameters, completionHandler: completionHandler)
-                    })
-                */
-            } else {
-                
-                if  let downloadTask = task as? NSURLSessionDownloadTask {
-                    completionHandler?(response, error)
-                    return
-                }
-                
-                if let uploadTask = task as? NSURLSessionUploadTask {
-                    completionHandler?(response, error)
-                    return
-                }
-                
-                var error: NSError?
-                var isValid = self.responseSerializer?.validateResponse(response, data: data!, error: &error)
-                
-                if (isValid == false) {
-                    completionHandler?(nil, error)
-                    return
-                }
+            if  let downloadTask = task as? NSURLSessionDownloadTask {
+                completionHandler?(response, error)
+                return
+            }
             
-                if (data != nil) {
-                    var responseObject: AnyObject? = self.responseSerializer?.response(data!)
-                    completionHandler?(responseObject, nil)
-                }
+            if let uploadTask = task as? NSURLSessionUploadTask {
+                completionHandler?(response, error)
+                return
+            }
+            
+            var error: NSError?
+            var isValid = self.responseSerializer?.validateResponse(response, data: data!, error: &error)
+            
+            if (isValid == false) {
+                completionHandler?(nil, error)
+                return
+            }
+        
+            if (data != nil) {
+                var responseObject: AnyObject? = self.responseSerializer?.response(data!)
+                completionHandler?(responseObject, nil)
             }
         }
     }
@@ -360,11 +391,9 @@ public class Http {
 
         var downloadProgress: ((Int64, Int64, Int64) -> Void)?
         var resumeData: NSData?
-        var destinationDirectory: NSURL?
+        var destinationDirectory: String?
 
         func URLSession(session: NSURLSession, downloadTask: NSURLSessionDownloadTask, didFinishDownloadingToURL location: NSURL) {
-            var error: NSError?
-
             let filename = downloadTask.response?.suggestedFilename
             
             // calculate final destination
@@ -374,10 +403,12 @@ public class Http {
                 var documentsDirectory  = NSFileManager.defaultManager().URLsForDirectory(.DocumentDirectory, inDomains: .UserDomainMask)[0] as NSURL
                 finalDestination = documentsDirectory.URLByAppendingPathComponent(filename!)
             } else {
-                finalDestination = destinationDirectory!.URLByAppendingPathComponent(filename!)
+                // check that the directory exists
+                var path = destinationDirectory?.stringByAppendingPathComponent(filename!)
+                finalDestination = NSURL(fileURLWithPath: path!)!
             }
 
-            NSFileManager.defaultManager().moveItemAtURL(location, toURL: finalDestination, error: &error)
+            NSFileManager.defaultManager().moveItemAtURL(location, toURL: finalDestination, error: nil)
         }
         
         func URLSession(session: NSURLSession!, downloadTask: NSURLSessionDownloadTask!, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
@@ -400,7 +431,7 @@ public class Http {
     }
 
     // MARK: Utility methods
-    private func calculateURL(baseURL: String?,  var url: String) -> NSURL {
+    public func calculateURL(baseURL: String?,  var url: String) -> NSURL {
         if (baseURL == nil || url.hasPrefix("http")) {
             return NSURL(string: url)!
         }
@@ -411,5 +442,21 @@ public class Http {
         }
             
         return finalURL.URLByAppendingPathComponent(url);
+    }
+    
+    public func hasMultiPartData(parameters: [String: AnyObject]?) -> Bool {
+        if (parameters == nil) {
+            return false
+        }
+        
+        var isMultiPart = false
+        for (_, value) in parameters! {
+            if value is MultiPartData {
+                isMultiPart = true
+                break
+            }
+        }
+        
+        return isMultiPart
     }
 }
