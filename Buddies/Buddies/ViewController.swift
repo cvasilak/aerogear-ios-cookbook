@@ -25,7 +25,7 @@ class MasterViewController: UITableViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        let matcher = URIMatcher()
+        let matcher = URIMatcher<Developer>()
         matcher.add("/rest/team/developers", type: Developer.self)
         
         self.http = Http(baseURL: "http://igtests-cvasilak.rhcloud.com/", responseSerializer: JsonSZResponseSerializer(matcher: matcher))

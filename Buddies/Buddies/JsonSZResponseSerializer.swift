@@ -17,11 +17,11 @@
 
 import Foundation
 
-class URIMatcher {
+class URIMatcher<S: JSONSerializable> {
     
-    var models = [String:  JSONSerializable]()
+    var models = [String: S.Type]()
     
-    subscript(key: String) -> AnyObject.Type? {
+    subscript(key: String) -> S.Type? {
         get {
             return models[key]
         }
@@ -33,18 +33,20 @@ class URIMatcher {
     
     init() {}
     
-    func add(path: String, type: AnyObject.Type) {
+    func add(path: String, type: S.Type) {
        models[path] = type
     }
     
 }
 
-class JsonSZResponseSerializer: JsonResponseSerializer {
+class JsonSZResponseSerializer<M: JSONSerializable>: ResponseSerializer {
+    
+    typealias Model = M
     
     let jsonSZ = JsonSZ()
-    let matcher: URIMatcher
+    let matcher: URIMatcher<M>
     
-    init(matcher: URIMatcher) {
+    init(matcher: URIMatcher<M>) {
         self.matcher = matcher
     }
     
@@ -53,17 +55,18 @@ class JsonSZResponseSerializer: JsonResponseSerializer {
     
     :returns: the serialized response
     */
-    override func response(response: NSURLResponse, data: NSData) -> (AnyObject?) {
-        let JSON: AnyObject? = super.response(response, data: data)
+    func response(response: NSURLResponse, data: NSData) -> (Model?) {
+        //let JSON: M? = super.response(response, data: data)
 
         // determine path
         let path = response.URL?.path!
         
         // retrieve class by path
-        let type: AnyObject.Type? = self.matcher[path!] as JSONSerializable.Type
+        let type = self.matcher[path!]
         
         if type != nil {
-            return self.jsonSZ.fromJSON(JSON, to: type!)
+        let object = NSJSONSerialization.JSONObjectWithData(data, options: NSJSONReadingOptions(0), error: nil)
+            return self.jsonSZ.fromJSON(object!, to: type!)
          }
         
         return nil
@@ -74,8 +77,8 @@ class JsonSZResponseSerializer: JsonResponseSerializer {
     
     :returns:  either true or false if the response is valid for this particular serializer
     */
-    override func validateResponse(response: NSURLResponse, data: NSData, error: NSErrorPointer) -> Bool {
+    func validateResponse(response: NSURLResponse, data: NSData, error: NSErrorPointer) -> Bool {
         // TODO: should we check if the response contains valid object
-        return super.validateResponse(response, data: data, error: error)
+        return true
     }
 }
