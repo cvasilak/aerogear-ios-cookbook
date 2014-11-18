@@ -17,22 +17,16 @@
 
 import Foundation
 
-/**
- The protocol that response serializers must adhere to
-*/
-public protocol ResponseSerializer {
+class Developer: JSONSerializable {
+    var name: String?
+    var twitter: String?
+    var image: String?
     
-    /**
-     Deserialize the response received
-
-     :returns: the serialized response
-    */
-    func response(response: NSURLResponse, data: NSData) -> (AnyObject?)
+    required init() {}
     
-    /**
-     Validate the response received
-    
-     :returns:  either true or false if the response is valid for this particular serializer
-    */
-    func validateResponse(response: NSURLResponse, data: NSData, error: NSErrorPointer) -> Bool
+    class func map(source: JsonSZ, object: Developer) {
+        object.name <= source["name"]
+        object.twitter <= source["twitter"]
+        object.image <= source["image"]
+    }
 }

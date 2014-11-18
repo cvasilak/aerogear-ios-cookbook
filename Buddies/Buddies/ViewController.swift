@@ -19,22 +19,29 @@ import UIKit
 
 class MasterViewController: UITableViewController {
 
-    var http = Http()
+    var http: Http!
     var data = [Developer]()
-
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        http.GET("http://igtests-cvasilak.rhcloud.com/rest/team/developers", completionHandler: { (response: AnyObject?, error: NSError?) -> Void in
+        let matcher = URIMatcher()
+        matcher.add("/rest/team/developers", type: Developer.self)
+        
+        self.http = Http(baseURL: "http://igtests-cvasilak.rhcloud.com/", responseSerializer: JsonSZResponseSerializer(matcher: matcher))
+        
+        http.GET("rest/team/developers", completionHandler: { (response: AnyObject?, error: NSError?) -> Void in
+            if error != nil {
+                println("An error has occured during read! \(error!)")
+                return
+            }
+            
             if (response != nil) {
                 for developer in (response!) as [AnyObject] {
                     // TODO with object serialization AGIOS-13 replace this code to plugin serializer
-                    self.data.append(Developer(name: developer["name"] as String, twitter: developer["twitter"] as String, image: NSURL(string: developer["photoURL"] as String)!))
+                   // self.data.append(Developer(name: developer["name"] as String, twitter: developer["twitter"] as String, image: NSURL(string: developer["photoURL"] as String)!))
                 }
                 self.tableView.reloadData()
-            }
-            if error != nil {
-                println("An error has occured during read! \(error!)")
             }
         })
     }
@@ -47,17 +54,17 @@ class MasterViewController: UITableViewController {
         let cell = tableView.dequeueReusableCellWithIdentifier("Cell", forIndexPath: indexPath) as UITableViewCell
 
         let developer = data[indexPath.row]
-        cell.textLabel?.text = developer.name
+        cell.textLabel.text = developer.name
         cell.detailTextLabel?.text = developer.twitter
         cell.tag = indexPath.row
         
         let priority = DISPATCH_QUEUE_PRIORITY_DEFAULT
         dispatch_async(dispatch_get_global_queue(priority, 0), {
-            var imageData = NSData(contentsOfURL: developer.image)
+            var imageData = NSData(contentsOfURL: NSURL(string: developer.image!)!)
             
             dispatch_async(dispatch_get_main_queue(), {
                 if cell.tag == indexPath.row {
-                    cell.imageView?.image = UIImage(data: imageData!)
+                    cell.imageView.image = UIImage(data: imageData!)
                     cell.setNeedsLayout()
                 }
             })
@@ -73,14 +80,4 @@ class MasterViewController: UITableViewController {
     }
 }
 
-class Developer {
-    init(name: String, twitter: String, image: NSURL) {
-        self.name = name
-        self.twitter = twitter
-        self.image = image
-    }
-    var name: String
-    var twitter: String
-    var image: NSURL
-}
 

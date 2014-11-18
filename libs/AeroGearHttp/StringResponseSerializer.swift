@@ -22,11 +22,11 @@ import Foundation
 */
 public class StringResponseSerializer : ResponseSerializer {
     
-    public func response(data: NSData) -> (AnyObject?) {
+    public func response(response: NSURLResponse, data: NSData) -> (AnyObject?) {
         return NSString(data: data, encoding:NSUTF8StringEncoding)
     }
     
-    public func validateResponse(response: NSURLResponse!, data: NSData, error: NSErrorPointer) -> Bool {
+    public func validateResponse(response: NSURLResponse, data: NSData, error: NSErrorPointer) -> Bool {
         let httpResponse = response as NSHTTPURLResponse
         var isValid = true
         

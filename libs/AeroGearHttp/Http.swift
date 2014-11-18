@@ -62,7 +62,7 @@ public typealias ProgressBlock = (Int64, Int64, Int64) -> Void
 public typealias CompletionBlock = (AnyObject?, NSError?) -> Void
 
 /**
-*  Main class for performing HTTP operations across RESTful resources
+Main class for performing HTTP operations across RESTful resources
 */
 public class Http {
 
@@ -489,7 +489,7 @@ public class Http {
             }
         
             if (data != nil) {
-                var responseObject: AnyObject? = self.responseSerializer?.response(data!)
+                var responseObject: AnyObject? = self.responseSerializer?.response(response, data: data!)
                 completionHandler?(responseObject, nil)
             }
         }
