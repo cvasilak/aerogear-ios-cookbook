@@ -22,12 +22,14 @@ import Foundation
 */
 public protocol ResponseSerializer {
     
+    typealias Model
+    
     /**
      Deserialize the response received
 
      :returns: the serialized response
     */
-    func response(response: NSURLResponse, data: NSData) -> (AnyObject?)
+    func response(response: NSURLResponse, data: NSData) -> (Model?)
     
     /**
      Validate the response received

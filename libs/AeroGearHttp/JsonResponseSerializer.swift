@@ -23,8 +23,8 @@ let HttpResponseSerializationErrorDomain = "org.aerogear.http.response"
 A response deserializer to JSON objects
 */
 public class JsonResponseSerializer : ResponseSerializer {
-    
-    public func response(response: NSURLResponse, data: NSData) -> (AnyObject?) {
+    public typealias Model = AnyObject
+    public func response(response: NSURLResponse, data: NSData) -> (Model?) {
         return NSJSONSerialization.JSONObjectWithData(data, options: NSJSONReadingOptions(0), error: nil)
     }
 
