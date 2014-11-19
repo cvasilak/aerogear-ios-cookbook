@@ -58,14 +58,14 @@ enum UploadType {
     case Stream(NSInputStream)
 }
 
-public typealias ProgressBlock = (Int64, Int64, Int64) -> Void
-public typealias CompletionBlock = (AnyObject?, NSError?) -> Void
+
 
 /**
 Main class for performing HTTP operations across RESTful resources
 */
-public class Http<Serializer> {
-
+public class Http<Serializer: ResponseSerializer> {
+    public typealias ProgressBlock = (Int64, Int64, Int64) -> Void
+    public typealias CompletionBlock = (AnyObject?, NSError?) -> Void
     
     var baseURL: String?
     var session: NSURLSession
@@ -73,7 +73,7 @@ public class Http<Serializer> {
     var responseSerializer: Serializer
     var authzModule:  AuthzModule?
     
-    private var delegate: SessionDelegate;
+    private var delegate: SessionDelegate<Serializer>;
     
     /**
     Initialize an HTTP object
@@ -96,9 +96,9 @@ public class Http<Serializer> {
         self.responseSerializer = responseSerializer
     }
     
-    deinit {
-        self.session.invalidateAndCancel()
-    }
+//    deinit {
+//        self.session.invalidateAndCancel()
+//    }
     
     /**
     Gateway to perform different http requests including multipart
@@ -122,7 +122,7 @@ public class Http<Serializer> {
             }
 
             let task = self.session.dataTaskWithRequest(request);
-            let delegate = TaskDataDelegate()
+            let delegate = TaskDataDelegate<Serializer>()
             delegate.completionHandler = completionHandler
             delegate.responseSerializer = self.responseSerializer;
             
@@ -168,10 +168,10 @@ public class Http<Serializer> {
                 case .Download(let destinationDirectory):
                     task = self.session.downloadTaskWithRequest(request)
                     
-                    let delegate = TaskDownloadDelegate()
+                    let delegate = TaskDownloadDelegate<Serializer>()
                     delegate.downloadProgress = progress
                     delegate.destinationDirectory = destinationDirectory;
-                    delegate.completionHandler = completionHandler
+                    delegate.completionHandler = completionHandler 
 
                     self.delegate[task] = delegate
 
@@ -185,7 +185,7 @@ public class Http<Serializer> {
                             task = self.session.uploadTaskWithStreamedRequest(request)
                     }
 
-                let delegate = TaskUploadDelegate()
+                let delegate = TaskUploadDelegate<Serializer>()
                 delegate.uploadProgress = progress
                 delegate.completionHandler = completionHandler
                     
@@ -359,11 +359,11 @@ public class Http<Serializer> {
     }
 }
 // MARK: NSURLSessionTaskDelegate
-private class TaskDelegate: NSObject, NSURLSessionTaskDelegate {
+private class TaskDelegate<Serializer: ResponseSerializer>: NSObject, NSURLSessionTaskDelegate {
     
     var data: NSData? { return nil }
     var completionHandler:  ((AnyObject?, NSError?) -> Void)?
-    var responseSerializer: JsonResponseSerializer?
+    var responseSerializer: Serializer?
     
     func URLSession(session: NSURLSession!, task: NSURLSessionTask!, willPerformHTTPRedirection response: NSHTTPURLResponse!, newRequest request: NSURLRequest!, completionHandler: ((NSURLRequest!) -> Void)!) {
         
@@ -411,14 +411,15 @@ private class TaskDelegate: NSObject, NSURLSessionTaskDelegate {
         }
         
         if (data != nil) {
-            var responseObject: AnyObject? = self.responseSerializer?.response(response, data: data!)
-            completionHandler?(responseObject, nil)
+            var responseObject: Serializer.Model? = self.responseSerializer?.response(response, data: data!)
+            //TODO: don't like this casting
+            completionHandler?(responseObject as NSObject, nil)
         }
     }
 }
 
 // MARK: NSURLSessionDataDelegate
-private class TaskDataDelegate: TaskDelegate, NSURLSessionDataDelegate {
+private class TaskDataDelegate<Serializer: ResponseSerializer>: TaskDelegate<Serializer>, NSURLSessionDataDelegate {
     
     private var mutableData: NSMutableData
     override var data: NSData? {
@@ -440,7 +441,7 @@ private class TaskDataDelegate: TaskDelegate, NSURLSessionDataDelegate {
 }
 
 // MARK: NSURLSessionDownloadDelegate
-private class TaskDownloadDelegate: TaskDelegate, NSURLSessionDownloadDelegate {
+private class TaskDownloadDelegate<Serializer: ResponseSerializer>: TaskDelegate<Serializer>, NSURLSessionDownloadDelegate {
     
     var downloadProgress: ((Int64, Int64, Int64) -> Void)?
     var resumeData: NSData?
@@ -474,7 +475,7 @@ private class TaskDownloadDelegate: TaskDelegate, NSURLSessionDownloadDelegate {
 }
 
 // MARK: NSURLSessionTaskDelegate
-private class TaskUploadDelegate: TaskDataDelegate {
+private class TaskUploadDelegate<Serializer: ResponseSerializer>: TaskDataDelegate<Serializer> {
     
     var uploadProgress: ((Int64, Int64, Int64) -> Void)?
     
@@ -482,11 +483,11 @@ private class TaskUploadDelegate: TaskDataDelegate {
         self.uploadProgress?(bytesSent, totalBytesSent, totalBytesExpectedToSend)
     }
 }
-class SessionDelegate: NSObject, NSURLSessionDelegate,  NSURLSessionTaskDelegate, NSURLSessionDataDelegate, NSURLSessionDownloadDelegate {
+class SessionDelegate<Serializer: ResponseSerializer>: NSObject, NSURLSessionDelegate,  NSURLSessionTaskDelegate, NSURLSessionDataDelegate, NSURLSessionDownloadDelegate {
     
-    private var delegates: [Int:  TaskDelegate]
+    private var delegates: [Int:  TaskDelegate<Serializer>]
     
-    private subscript(task: NSURLSessionTask) -> TaskDelegate? {
+    private subscript(task: NSURLSessionTask) -> TaskDelegate<Serializer>? {
         get {
             return self.delegates[task.taskIdentifier]
         }
@@ -557,7 +558,7 @@ class SessionDelegate: NSObject, NSURLSessionDelegate,  NSURLSessionTaskDelegate
     }
     
     func URLSession(session: NSURLSession!, dataTask: NSURLSessionDataTask!, didBecomeDownloadTask downloadTask: NSURLSessionDownloadTask!) {
-        let downloadDelegate = TaskDownloadDelegate()
+        let downloadDelegate = TaskDownloadDelegate<Serializer>()
         self[downloadTask] = downloadDelegate
     }
     

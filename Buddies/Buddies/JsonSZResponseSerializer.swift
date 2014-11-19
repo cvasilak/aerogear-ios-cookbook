@@ -17,37 +17,15 @@
 
 import Foundation
 
-class URIMatcher<S: JSONSerializable> {
-    
-    var models = [String: S.Type]()
-    
-    subscript(key: String) -> S.Type? {
-        get {
-            return models[key]
-        }
-        
-        set {
-            models[key] = newValue
-        }
-    }
-    
-    init() {}
-    
-    func add(path: String, type: S.Type) {
-       models[path] = type
-    }
-    
-}
-
 class JsonSZResponseSerializer<M: JSONSerializable>: ResponseSerializer {
     
     typealias Model = M
-    
+    let type: M.Type
     let jsonSZ = JsonSZ()
-    let matcher: URIMatcher<M>
+
     
-    init(matcher: URIMatcher<M>) {
-        self.matcher = matcher
+    init(type: M.Type) {
+        self.type = type
     }
     
     /**
@@ -56,20 +34,14 @@ class JsonSZResponseSerializer<M: JSONSerializable>: ResponseSerializer {
     :returns: the serialized response
     */
     func response(response: NSURLResponse, data: NSData) -> (Model?) {
-        //let JSON: M? = super.response(response, data: data)
 
-        // determine path
-        let path = response.URL?.path!
         
-        // retrieve class by path
-        let type = self.matcher[path!]
-        
-        if type != nil {
+       // if self.type != nil {
         let object = NSJSONSerialization.JSONObjectWithData(data, options: NSJSONReadingOptions(0), error: nil)
-            return self.jsonSZ.fromJSON(object!, to: type!)
-         }
+        return self.jsonSZ.fromJSON(object!, to: self.type)
+        // }
         
-        return nil
+        //return nil
     }
 
     /**

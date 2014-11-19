@@ -19,17 +19,15 @@ import UIKit
 
 class MasterViewController: UITableViewController {
 
-    var http: Http<Developer>!
     var data = [Developer]()
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        let matcher = URIMatcher<Developer>()
-        matcher.add("/rest/team/developers", type: Developer.self)
+
         let stringURL = "http://igtests-cvasilak.rhcloud.com/"
-        
-        self.http = Http<Developer>(baseURL: stringURL, sessionConfig:  NSURLSessionConfiguration.defaultSessionConfiguration(), requestSerialiser:JsonRequestSerializer(), responseSerializer: JsonSZResponseSerializer(matcher: matcher))
+        let serial = JsonSZResponseSerializer(type: Developer.self)
+
+        var http = Http(baseURL: stringURL, sessionConfig:  NSURLSessionConfiguration.defaultSessionConfiguration(), requestSerializer:JsonRequestSerializer(), responseSerializer: serial)
         
         http.GET("rest/team/developers", completionHandler: { (response: AnyObject?, error: NSError?) -> Void in
             if error != nil {
