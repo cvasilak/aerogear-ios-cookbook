@@ -17,7 +17,7 @@
 
 import Foundation
 
-public protocol JSONSerializable: Hashable {
+public protocol JSONSerializable {
     init()
     class func map(source: JsonSZ, object: Self)
 }

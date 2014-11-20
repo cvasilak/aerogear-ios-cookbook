@@ -17,35 +17,15 @@
 
 import Foundation
 
-class URIMatcher {
+class JsonSZResponseSerializer<M: JSONSerializable>: ResponseSerializer {
     
-    var models = [String:  JSONSerializable]()
-    
-    subscript(key: String) -> AnyObject.Type? {
-        get {
-            return models[key]
-        }
-        
-        set {
-            models[key] = newValue
-        }
-    }
-    
-    init() {}
-    
-    func add(path: String, type: AnyObject.Type) {
-       models[path] = type
-    }
-    
-}
-
-class JsonSZResponseSerializer: JsonResponseSerializer {
-    
+    typealias Model = M
+    let type: M.Type
     let jsonSZ = JsonSZ()
-    let matcher: URIMatcher
+
     
-    init(matcher: URIMatcher) {
-        self.matcher = matcher
+    init(type: M.Type) {
+        self.type = type
     }
     
     /**
@@ -53,18 +33,14 @@ class JsonSZResponseSerializer: JsonResponseSerializer {
     
     :returns: the serialized response
     */
-    override func response(response: NSURLResponse, data: NSData) -> (AnyObject?) {
-        let JSON: AnyObject? = super.response(response, data: data)
+    func response(response: NSURLResponse, data: NSData) -> (Model?) {
 
-        // determine path
-        let path = response.URL?.path!
         
-        // retrieve class by path
-        let type: AnyObject.Type? = self.matcher[path!] as JSONSerializable.Type
-        
-        if type != nil {
-            return self.jsonSZ.fromJSON(JSON, to: type!)
-         }
+//       
+//     let object = NSJSONSerialization.JSONObjectWithData(data, options: NSJSONReadingOptions(0), error: nil)
+//       if object != nil {
+//        return self.jsonSZ.fromJSON(object!, to: self.type)
+//       }
         
         return nil
     }
@@ -74,8 +50,8 @@ class JsonSZResponseSerializer: JsonResponseSerializer {
     
     :returns:  either true or false if the response is valid for this particular serializer
     */
-    override func validateResponse(response: NSURLResponse, data: NSData, error: NSErrorPointer) -> Bool {
+    func validateResponse(response: NSURLResponse, data: NSData, error: NSErrorPointer) -> Bool {
         // TODO: should we check if the response contains valid object
-        return super.validateResponse(response, data: data, error: error)
+        return true
     }
 }
