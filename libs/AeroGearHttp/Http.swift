@@ -65,7 +65,7 @@ Main class for performing HTTP operations across RESTful resources
 */
 public class Http<Serializer: ResponseSerializer> {
     public typealias ProgressBlock = (Int64, Int64, Int64) -> Void
-    public typealias CompletionBlock = (AnyObject?, NSError?) -> Void
+    public typealias CompletionBlock = (Serializer.Model?, NSError?) -> Void
     
     var baseURL: String?
     var session: NSURLSession
@@ -96,9 +96,9 @@ public class Http<Serializer: ResponseSerializer> {
         self.responseSerializer = responseSerializer
     }
     
-//    deinit {
-//        self.session.invalidateAndCancel()
-//    }
+    deinit {
+        self.session.invalidateAndCancel()
+    }
     
     /**
     Gateway to perform different http requests including multipart
@@ -123,7 +123,7 @@ public class Http<Serializer: ResponseSerializer> {
 
             let task = self.session.dataTaskWithRequest(request);
             let delegate = TaskDataDelegate<Serializer>()
-            delegate.completionHandler = completionHandler
+            //delegate.completionHandler = completionHandler
             delegate.responseSerializer = self.responseSerializer;
             
             self.delegate[task] = delegate
@@ -171,7 +171,7 @@ public class Http<Serializer: ResponseSerializer> {
                     let delegate = TaskDownloadDelegate<Serializer>()
                     delegate.downloadProgress = progress
                     delegate.destinationDirectory = destinationDirectory;
-                    delegate.completionHandler = completionHandler 
+                    //delegate.completionHandler = completionHandler
 
                     self.delegate[task] = delegate
 
@@ -187,7 +187,7 @@ public class Http<Serializer: ResponseSerializer> {
 
                 let delegate = TaskUploadDelegate<Serializer>()
                 delegate.uploadProgress = progress
-                delegate.completionHandler = completionHandler
+                //delegate.completionHandler = completionHandler
                     
                 self.delegate[task] = delegate
             }

@@ -36,12 +36,13 @@ class JsonSZResponseSerializer<M: JSONSerializable>: ResponseSerializer {
     func response(response: NSURLResponse, data: NSData) -> (Model?) {
 
         
-       // if self.type != nil {
-        let object = NSJSONSerialization.JSONObjectWithData(data, options: NSJSONReadingOptions(0), error: nil)
-        return self.jsonSZ.fromJSON(object!, to: self.type)
-        // }
+//       
+//     let object = NSJSONSerialization.JSONObjectWithData(data, options: NSJSONReadingOptions(0), error: nil)
+//       if object != nil {
+//        return self.jsonSZ.fromJSON(object!, to: self.type)
+//       }
         
-        //return nil
+        return nil
     }
 
     /**

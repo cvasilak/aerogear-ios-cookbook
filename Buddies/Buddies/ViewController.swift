@@ -25,8 +25,8 @@ class MasterViewController: UITableViewController {
         super.viewDidLoad()
 
         let stringURL = "http://igtests-cvasilak.rhcloud.com/"
-        let serial = JsonSZResponseSerializer(type: Developer.self)
-
+        //let serial = JsonSZResponseSerializer(type: Developer.self)
+/*
         var http = Http(baseURL: stringURL, sessionConfig:  NSURLSessionConfiguration.defaultSessionConfiguration(), requestSerializer:JsonRequestSerializer(), responseSerializer: serial)
         
         http.GET("rest/team/developers", completionHandler: { (response: AnyObject?, error: NSError?) -> Void in
@@ -43,6 +43,7 @@ class MasterViewController: UITableViewController {
                 self.tableView.reloadData()
             }
         })
+*/
     }
 
     override func tableView(tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
