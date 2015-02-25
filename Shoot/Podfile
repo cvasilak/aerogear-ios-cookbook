@@ -4,7 +4,7 @@ xcodeproj 'Shoot.xcodeproj'
 platform :ios, '8.0'
 
 pod 'AeroGearHttp', '0.2.0'
-pod 'AeroGearOAuth2', '0.2.0'
+pod 'AeroGearOAuth2', :git => 'https://github.com/corinnekrych/aerogear-ios-oauth2-1.git', :branch => 'AGIOS-400.refresh.token.simplified'
 
 # due to swift compiler bug, disable the '-Fastest' optimization flag
 # for the 'AeroGearOAuth2' library
